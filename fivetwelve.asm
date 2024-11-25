@@ -21,7 +21,6 @@ INVALID_MOVE:	.asciiz "Invalid move.\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
 MOVE:		.word	
-STORED_GRID:	.word 	0, 0, 0, 0, 0, 0, 0, 0, 0
 
 .text
 main:
