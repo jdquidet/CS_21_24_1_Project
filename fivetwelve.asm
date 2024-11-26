@@ -1,6 +1,6 @@
 .data
-WELCOME: 	.asciiz "Choose [1] or [2]:\n[1] New Game\n[2] Start from a State\n"
-BOARD_CONFIG:	.asciiz "Enter a board configuration:\n"
+WELCOME: 	.asciiz "Choose:\n[1] New Game\n[2] Start from a State\n[X] Quit\n"
+BOARD_CONFIG:	.asciiz "Enter a board configuration (Invalid input = back to Main menu):\n"
 LINE:           .asciiz "+---+---+---+\n"
 VERTICAL: 	.asciiz "|"
 NUMBER_0:	.asciiz "   "
@@ -16,12 +16,14 @@ NUMBER_512:	.asciiz "512"
 NEWLINE:	.asciiz "\n"
 WIN:		.asciiz "Congratulations! You have reached the 512 tile!"
 LOSE: 		.asciiz "Game Over."
-ENTER_MOVE:	.asciiz "Enter a move (W=Up, A=Left, S=Down, D=Right, X=Exit, 3=Disable RNG, 4=Enable RNG):\n"
+QUIT:		.asciiz "Program Terminated."
+ENTER_MOVE:	.asciiz "Enter a move (W=Up, A=Left, S=Down, D=Right, X=Quit, 3=Disable RNG, 4=Enable RNG):\n"
 INVALID_MOVE:	.asciiz "Invalid move.\n"
+INVALID_INT:	.asciiz "Invalid integer.\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
 MOVE:		.word	
-ORIGIN_GRID: 	.word 	0:9  			# Array to store 9 original values
+ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
 
 .text
 main:
@@ -29,12 +31,15 @@ main:
 	la 	$a0, WELCOME
 	syscall
 	
-	li 	$v0, 5
+	li	$v0, 8
+	la	$a0, MOVE
+	li	$a1, 100
 	syscall
-	move 	$t0, $v0
 	
-	beq 	$t0, 1, input_random
-	beq 	$t0, 2, input_defined
+	lw	$t0, MOVE
+	beq 	$t0, 0xa31, input_new
+	beq 	$t0, 0xa32, input_state
+	beq	$t0, 0xa58, terminate	# X = Quit
 main_loop:
 	jal	print_grid
 	jal	is_win
@@ -50,7 +55,7 @@ input_move:
 	syscall
 	
 	lw	$t0, MOVE
-	beq	$t0, 0xa58, game_over	# X = game over
+	beq	$t0, 0xa58, terminate	# X = Quit
 	
 	jal	store_origin
 	beq	$t0, 0xa57, move_up	# W = move up
@@ -66,7 +71,7 @@ invalid_move:
     	syscall
 	j	input_move
 
-input_random:				# NEW GAME 1
+input_new:				# NEW GAME 1
 	li 	$t0, 0
 input_random_loop:
     	jal 	zero_or_two
@@ -112,7 +117,7 @@ two:
 	jr 	$ra
 	# End #
 
-input_defined:				# NEW GAME 2
+input_state:				# NEW GAME 2
 	li 	$v0, 4 	
     	la 	$a0, BOARD_CONFIG
     	syscall
@@ -120,41 +125,79 @@ input_defined:				# NEW GAME 2
 	li 	$v0, 5
 	syscall
 	move 	$t1, $v0
+	move	$a0, $t1
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t2, $v0
+	move	$a0, $t2
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t3, $v0
+	move	$a0, $t3
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t4, $v0
+	move	$a0, $t4
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t5, $v0
+	move	$a0, $t5
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t6, $v0
+	move	$a0, $t6
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t7, $v0
+	move	$a0, $t7
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t8, $v0
+	move	$a0, $t8
+	jal	check_integer
 	
 	li 	$v0, 5
 	syscall
 	move 	$t9, $v0
+	move	$a0, $t9
+	jal	check_integer
 	
 	j 	main_loop		# proceeds to game loop
 
+check_integer:
+	beq	$a0, 0, valid_integer
+	beq	$a0, 2, valid_integer
+	beq	$a0, 4, valid_integer
+	beq	$a0, 8, valid_integer
+	beq	$a0, 16, valid_integer
+	beq	$a0, 32, valid_integer
+	beq	$a0, 64, valid_integer
+	beq	$a0, 128, valid_integer
+	beq	$a0, 256, valid_integer
+	beq	$a0, 512, valid_integer
+	
+	li 	$v0, 4 		
+    	la 	$a0, INVALID_INT
+    	syscall
+    	
+    	j	main
+valid_integer:
+	jr	$ra
+	
 print_grid:				# GRID PRINTING
 	##### preamble #####
 	addi	$sp, $sp, -4
@@ -340,7 +383,12 @@ game_over:
     	j exit
 False:
 	jr	$ra
-	
+
+terminate:
+	li 	$v0, 4 		
+    	la 	$a0, QUIT
+    	syscall
+			
 exit:
 	li 	$v0, 10
 	syscall
