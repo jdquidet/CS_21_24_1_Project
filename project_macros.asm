@@ -44,7 +44,7 @@ ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
     	li 	$a1, %upperbound	# Upperbound when generating a num 
     	li 	$v0, 42			# Randomizer syscall  
     	syscall
-	.end_macro
+    .end_macro
 # Print Rows of board
     .macro print_row %reg1 %reg2 %reg3
 	print_str LINE
@@ -139,7 +139,7 @@ input_random_loop:
 
 # Used Functions for randomized zero or two #
 zero_or_two:
-	randomize 2		# randomize a number in 
+	randomize 2		# randomize a number in [0,1]
 	beq 	$a0, 0, zero	# if num == 0 return zero
 	beq 	$a0, 1, two	# if num == 1 return two
 zero:
@@ -151,7 +151,6 @@ two:
 	addi 	$t0, $t0, 1	# increment $t0 >> there are now $t0 tiles in the board
 	jr 	$ra
 # End #
-
 # ======= NEW GAME FROM STATE ==========
 input_state:				# NEW GAME 2
 	print_str BOARD_CONFIG
@@ -468,11 +467,11 @@ merge_1:
 	li	$a2, 0
 merge_end:
 	jr 	$ra	
+# ====== adding a random tile =======
 add_random_tile:
 	jal 	check_origin	    # Checks if grid changed
-	beq	$s0, 3, main_loop   
+	beq	$s0, 3, main_loop   # If $s0 is 3 - RNG disabled no need to add_random_tile
 	randomize 9		    # Choose a tile! from 1 to 9 >> (note zero indexed so choose a number in [0,8]
-
 	beq	$a0, 0, tile_t1
 	beq	$a0, 1, tile_t2
 	beq	$a0, 2,	tile_t3
@@ -482,6 +481,16 @@ add_random_tile:
 	beq	$a0, 6,	tile_t7
 	beq	$a0, 7,	tile_t8
 	beq	$a0, 8,	tile_t9
+											
+tile_t1: generate_tile $t1
+tile_t2: generate_tile $t2
+tile_t3: generate_tile $t3
+tile_t4: generate_tile $t4
+tile_t5: generate_tile $t5
+tile_t6: generate_tile $t6
+tile_t7: generate_tile $t7
+tile_t8: generate_tile $t8
+tile_t9: generate_tile $t9
 
 # -------- CHECK BOARD STATE IF MOVE INPUT IS VALID ------------
 check_origin:
@@ -542,6 +551,7 @@ return_nothing:
 	lw	$ra, 12($sp)
 	addi	$sp, $sp, 16
 	##### end #####
+
 	jr	$ra
 return_invalid:
 	lw	$s0, 0($sp)
@@ -552,17 +562,6 @@ return_invalid:
 	##### end #####
 	j	invalid_move
 
-# ===== GENERATE '2' ON TILE ========
-											
-tile_t1: generate_tile $t1
-tile_t2: generate_tile $t2
-tile_t3: generate_tile $t3
-tile_t4: generate_tile $t4
-tile_t5: generate_tile $t5
-tile_t6: generate_tile $t6
-tile_t7: generate_tile $t7
-tile_t8: generate_tile $t8
-tile_t9: generate_tile $t9
 
 # ===== RNG =======																													
 rng_disable:
