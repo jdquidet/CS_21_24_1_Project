@@ -1,6 +1,6 @@
 .data
-WELCOME: 	.asciiz "Choose:\n[1] New Game\n[2] Start from a State\n[X] Quit\n"
-BOARD_CONFIG:	.asciiz "Enter a board configuration (Invalid input = back to Main menu):\n"
+WELCOME: 	.asciiz "Main Menu:\n[1] New Game\n[2] Start from a State\n[X] Quit\n"
+BOARD_CONFIG:	.asciiz "Enter a board configuration (Invalid integer = back to Main menu):\n"
 LINE:           .asciiz "+---+---+---+\n"
 VERTICAL: 	.asciiz "|"
 NUMBER_0:	.asciiz "   "
