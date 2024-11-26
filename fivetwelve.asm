@@ -21,6 +21,7 @@ INVALID_MOVE:	.asciiz "Invalid move.\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
 MOVE:		.word	
+ORIGIN_GRID: 	.word 	0:9  			# Array to store 9 original values
 
 .text
 main:
@@ -50,13 +51,16 @@ input_move:
 	
 	lw	$t0, MOVE
 	beq	$t0, 0xa58, game_over	# X = game over
+	
+	jal	store_origin
 	beq	$t0, 0xa57, move_up	# W = move up
 	beq	$t0, 0xa41, move_left	# A = move left
 	beq	$t0, 0xa53, move_down	# S = move down
 	beq	$t0, 0xa44, move_right	# D = move right
+	
 	beq	$t0, 0xa33, rng_disable	# 3 = disable RNG
 	beq	$t0, 0xa34, rng_enable	# 4 = enable RNG
-	
+invalid_move:	
 	li 	$v0, 4 		
     	la 	$a0, INVALID_MOVE
     	syscall
@@ -64,7 +68,7 @@ input_move:
 
 input_random:				# NEW GAME 1
 	li 	$t0, 0
-	
+input_random_loop:
     	jal 	zero_or_two
     	move 	$t1, $v0   
     	jal 	zero_or_two
@@ -83,6 +87,8 @@ input_random:				# NEW GAME 1
     	move 	$t8, $v0    	
     	jal 	zero_or_two
     	move 	$t9, $v0
+    	
+    	blt	$t0, 2, input_random_loop
     	
     	j 	main_loop		# proceeds to game loop
 
@@ -338,7 +344,20 @@ False:
 exit:
 	li 	$v0, 10
 	syscall
-	
+
+store_origin:
+	sw 	$t1, ORIGIN_GRID
+    	sw 	$t2, ORIGIN_GRID+4
+    	sw 	$t3, ORIGIN_GRID+8
+    	sw 	$t4, ORIGIN_GRID+12
+    	sw 	$t5, ORIGIN_GRID+16
+    	sw 	$t6, ORIGIN_GRID+20
+    	sw 	$t7, ORIGIN_GRID+24
+    	sw 	$t8, ORIGIN_GRID+28
+    	sw 	$t9, ORIGIN_GRID+32
+    	
+    	jr	$ra	
+			
 move_up:
 	move	$a0, $t1
 	move	$a1, $t4
@@ -371,7 +390,6 @@ move_up:
 	move	$t9, $a2
 	
 	j	add_random_tile
-	
 move_left:
 	move	$a0, $t1
 	move	$a1, $t2
@@ -404,7 +422,6 @@ move_left:
 	move	$t9, $a2
 	
 	j	add_random_tile
-	
 move_down:
 	move	$a0, $t7
 	move	$a1, $t4
@@ -437,7 +454,6 @@ move_down:
 	move	$t3, $a2
 	
 	j	add_random_tile
-
 move_right:
 	move	$a0, $t3
 	move	$a1, $t2
@@ -498,6 +514,8 @@ merge_end:
 	jr 	$ra
 			
 add_random_tile:
+	jal 	check_origin		# Checks if grid changed
+
 	beq	$s0, 3, main_loop
 
 	li 	$a1, 9 
@@ -513,7 +531,98 @@ add_random_tile:
 	beq	$a0, 6,	tile_t7
 	beq	$a0, 7,	tile_t8
 	beq	$a0, 8,	tile_t9
+
+check_origin:
+	##### preamble #####
+	addi	$sp, $sp, -16
+	sw	$s0, 0($sp)
+	sw	$s1, 4($sp)
+	sw	$s2, 8($sp)
+	sw	$ra, 12($sp)
+	##### preamble #####
 	
+	li 	$s0, 0       		# Change flag (0 = unchanged, 1 = changed)
+    	li 	$s1, 0       		# Loop counter
+check_origin_loop:	
+	# Calculate offset
+    	mul 	$s2, $s1, 4  		# Multiply counter by 4 (word size)
+
+    	# Load original and current values
+    	lw 	$s2, ORIGIN_GRID($s2)  	# Original value
+    
+    	# Load current register value based on counter
+    	beq 	$s1, 0, check_t1
+    	beq 	$s1, 1, check_t2
+    	beq 	$s1, 2, check_t3
+    	beq 	$s1, 3, check_t4
+    	beq 	$s1, 4, check_t5
+    	beq 	$s1, 5, check_t6
+    	beq 	$s1, 6, check_t7
+    	beq 	$s1, 7, check_t8
+    	beq 	$s1, 8, check_t9
+check_t1:
+    	bne 	$s2, $t1, grid_changed
+    	j 	continue_loop
+check_t2:
+    	bne 	$s2, $t2, grid_changed
+    	j 	continue_loop
+check_t3:
+    	bne 	$s2, $t3, grid_changed
+    	j 	continue_loop
+check_t4:
+    	bne 	$s2, $t4, grid_changed
+    	j 	continue_loop
+check_t5:
+    	bne 	$s2, $t5, grid_changed
+    	j 	continue_loop
+check_t6:
+    	bne 	$s2, $t6, grid_changed
+    	j 	continue_loop
+check_t7:
+    	bne 	$s2, $t7, grid_changed
+    	j 	continue_loop
+check_t8:
+    	bne 	$s2, $t8, grid_changed
+    	j 	continue_loop
+check_t9:
+    	bne 	$s2, $t9, grid_changed
+    	j 	continue_loop
+continue_loop:	
+	# Increment counter
+    	addi 	$s1, $s1, 1
+    	blt 	$s1, 9, check_origin_loop
+
+    	# If we get here, no changes detected
+    	j 	check_result
+grid_changed:
+    	# Set change flag
+    	li 	$s0, 1
+check_result:
+    	# Result based on change flag
+    	beq 	$s0, 1, return_nothing
+
+    	# Else 
+    	j	return_invalid
+return_nothing:
+    	##### end #####
+	lw	$s0, 0($sp)
+	lw	$s1, 4($sp)
+	lw	$s2, 8($sp)
+	lw	$ra, 12($sp)
+	addi	$sp, $sp, 16
+	##### end #####
+	
+	jr	$ra
+return_invalid:
+	lw	$s0, 0($sp)
+	lw	$s1, 4($sp)
+	lw	$s2, 8($sp)
+	lw	$ra, 12($sp)
+	addi	$sp, $sp, 16
+	##### end #####
+	
+	j	invalid_move
+			
 tile_t1:
 	bnez	$t1, add_random_tile
 	li	$t1, 2
