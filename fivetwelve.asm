@@ -97,6 +97,9 @@ main:
 	beq 	$t0, 0xa31, input_new	# If NEW GAME
 	beq 	$t0, 0xa32, input_state # If Start from a STATE
 	beq	$t0, 0xa58, terminate	# X = Quit
+	
+	print_str INVALID_MOVE		# otherwise, Print INVALID MOVE
+	j	main			# Loop back to main (main menu)	
 # ===== Main Loop - print grid - check win state - get input =====
 main_loop:	# Print the Grid
 	jal	print_grid	# Print the Grid
