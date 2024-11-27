@@ -22,37 +22,89 @@ INVALID_MOVE:	.asciiz "Invalid move.\n"
 INVALID_INT:	.asciiz "Invalid integer.\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
-MOVE:		.word	
+MOVE:		.word			# We store user input here
 ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
-
-.text
-main:
-	li 	$v0, 4
-	la 	$a0, WELCOME
-	syscall
-	
-	li	$v0, 8
-	la	$a0, MOVE
-	li	$a1, 100
-	syscall
-	
-	lw	$t0, MOVE
-	beq 	$t0, 0xa31, input_new
-	beq 	$t0, 0xa32, input_state
-	beq	$t0, 0xa58, terminate	# X = Quit
-main_loop:
-	jal	print_grid
-	jal	is_win
-	jal	is_lose
-input_move:	
-	li 	$v0, 4 		
-    	la 	$a0, ENTER_MOVE
+# ---------------------- MACROS TO REDUCE REDUNDANCY ----------------------
+# -- Helper Macros
+# Print String
+    .macro print_str %str
+        li $v0, 4
+        la $a0, %str
+        syscall
+    .end_macro
+# Read String 
+    .macro get_input %address
+        li      $v0, 8            # Syscall for reading string
+        la      $a0, %address     # Address of buffer to store input
+        li      $a1, 100  	  # Maximum length of input
+        syscall                   # Read input from user
+    .end_macro
+# Randomizer
+    .macro randomize %upperbound
+    	li 	$a1, %upperbound	# Upperbound when generating a num 
+    	li 	$v0, 42			# Randomizer syscall  
     	syscall
+    .end_macro
+# Print Rows of board
+    .macro print_row %reg1 %reg2 %reg3
+	print_str LINE
+	print_str VERTICAL		
+	move 	$a0, %reg1
+	jal 	print_integer
+	print_str VERTICAL
+	move	$a0, %reg2
+	jal 	print_integer
+	print_str VERTICAL
+	move	$a0, %reg3
+	jal 	print_integer
+	print_str VERTICAL
+	print_str NEWLINE
+     .end_macro
+# -- Functional Macros
+# Generate zero or two
+    .macro call_zero_or_two %reg
+	jal zero_or_two		  # Call zero_or_two function 
+	move %reg, $v0		  # returns a zero or two
+    .end_macro
+# Input the state of a tile
+	.macro set_tile %reg
+		li 	$v0, 5
+		syscall
+		move 	%reg, $v0
+		move	$a0, %reg
+		jal	check_integer
+	.end_macro
+# Generate a 2 on tile
+	.macro generate_tile %reg
+		bnez	%reg, add_random_tile
+		li	%reg, 2
+		j	main_loop
+	.end_macro
+# Check if changed
+	.macro check_tile_change %reg1 %reg2
+		bne %reg1, %reg2, grid_changed
+    	j 	continue_loop
+	.end_macro
 
-	li	$v0, 8
-	la	$a0, MOVE
-	li	$a1, 100
-	syscall
+# ---------------------- MAIN PROGRAM ----------------------
+.text
+# First Load Initialize the Board
+main:
+	print_str WELCOME		# Print MAIN MENU PROMPT
+	get_input MOVE			# Read User Input STORE IN MOVE
+	
+	lw	$t0, MOVE		# load MOVE to t0
+	beq 	$t0, 0xa31, input_new	# If NEW GAME
+	beq 	$t0, 0xa32, input_state # If Start from a STATE
+	beq	$t0, 0xa58, terminate	# X = Quit
+# ===== Main Loop - print grid - check win state - get input =====
+main_loop:	# Print the Grid
+	jal	print_grid	# Print the Grid
+	jal	is_win		# Check if win
+	jal	is_lose		# Check if lose
+input_move:	# Get User Input
+	print_str ENTER_MOVE	# Prompt Move
+	get_input MOVE		# Get Input
 	
 	lw	$t0, MOVE
 	beq	$t0, 0xa58, terminate	# X = Quit
@@ -65,121 +117,55 @@ input_move:
 	
 	beq	$t0, 0xa33, rng_disable	# 3 = disable RNG
 	beq	$t0, 0xa34, rng_enable	# 4 = enable RNG
+# Skipped if move is valid -- else we jump here if board changed
 invalid_move:	
-	li 	$v0, 4 		
-    	la 	$a0, INVALID_MOVE
-    	syscall
-	j	input_move
-
+	print_str INVALID_MOVE		# Print INVALID MOVE
+	j	input_move		# Loop back to input_move
+# ======= NEW GAME ==========
 input_new:				# NEW GAME 1
-	li 	$t0, 0
+	li 	$t0, 0			
 input_random_loop:
-    	jal 	zero_or_two
-    	move 	$t1, $v0   
-    	jal 	zero_or_two
-    	move 	$t2, $v0    	
-    	jal 	zero_or_two
-    	move 	$t3, $v0    	
-    	jal 	zero_or_two
-    	move 	$t4, $v0    	
-    	jal 	zero_or_two
-    	move 	$t5, $v0    	
-    	jal 	zero_or_two
-    	move 	$t6, $v0    	
-    	jal 	zero_or_two
-    	move 	$t7, $v0    	
-    	jal 	zero_or_two
-    	move 	$t8, $v0    	
-    	jal 	zero_or_two
-    	move 	$t9, $v0
-    	
-    	blt	$t0, 2, input_random_loop
-    	
+	call_zero_or_two $t1		# Calls the zero_or_two function (generates random 0 or 2) then store to t1
+	call_zero_or_two $t2		# Store to t2
+	call_zero_or_two $t3		# Store to t3
+	call_zero_or_two $t4		# Store to t4
+	call_zero_or_two $t5		# Store to t5
+	call_zero_or_two $t6		# Store to t6
+	call_zero_or_two $t7		# Store to t7
+	call_zero_or_two $t8		# Store to t8
+	call_zero_or_two $t9		# Store to t9
+    	blt	$t0, 2, input_random_loop # If $t0 < 2 then input random loop again, the board has to have ATLEAST 2 "2" initialized tiles
     	j 	main_loop		# proceeds to game loop
 
-	# Used Functions for randomized zero or two #
+# Used Functions for randomized zero or two #
 zero_or_two:
-	li 	$a1, 2 
-    	li 	$v0, 42			# Randomizer syscall  
-    	syscall
-
-	beq 	$a0, 0, zero
-	beq 	$a0, 1, two
+	randomize 2		# randomize a number in [0,1]
+	beq 	$a0, 0, zero	# if num == 0 return zero
+	beq 	$a0, 1, two	# if num == 1 return two
 zero:
-	li 	$v0, 0	
-	
-	jr 	$ra
+	li 	$v0, 0		
+	jr 	$ra		# return 0
 two:
-	bge	$t0, 2, zero
+	bge	$t0, 2, zero	# 
 	li 	$v0, 2
-	addi 	$t0, $t0, 1
-	
+	addi 	$t0, $t0, 1	# increment $t0 >> there are now $t0 tiles in the board
 	jr 	$ra
-	# End #
-
+# End #
+# ======= NEW GAME FROM STATE ==========
 input_state:				# NEW GAME 2
-	li 	$v0, 4 	
-    	la 	$a0, BOARD_CONFIG
-    	syscall
-    	
-	li 	$v0, 5
-	syscall
-	move 	$t1, $v0
-	move	$a0, $t1
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t2, $v0
-	move	$a0, $t2
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t3, $v0
-	move	$a0, $t3
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t4, $v0
-	move	$a0, $t4
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t5, $v0
-	move	$a0, $t5
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t6, $v0
-	move	$a0, $t6
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t7, $v0
-	move	$a0, $t7
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t8, $v0
-	move	$a0, $t8
-	jal	check_integer
-	
-	li 	$v0, 5
-	syscall
-	move 	$t9, $v0
-	move	$a0, $t9
-	jal	check_integer
-	
+	print_str BOARD_CONFIG
+	set_tile $t1
+	set_tile $t2
+	set_tile $t3
+	set_tile $t4
+	set_tile $t5
+	set_tile $t6
+	set_tile $t7
+	set_tile $t8
+	set_tile $t9
 	j 	main_loop		# proceeds to game loop
-
 check_integer:
-	beq	$a0, 0, valid_integer
+	beq	$a0, 0, valid_integer	# check if integers are valid
 	beq	$a0, 2, valid_integer
 	beq	$a0, 4, valid_integer
 	beq	$a0, 8, valid_integer
@@ -189,95 +175,35 @@ check_integer:
 	beq	$a0, 128, valid_integer
 	beq	$a0, 256, valid_integer
 	beq	$a0, 512, valid_integer
-	
-	li 	$v0, 4 		
-    	la 	$a0, INVALID_INT
-    	syscall
-    	
+	print_str INVALID_INT		# Did not branch >> Invalid integer
     	j	main
 valid_integer:
 	jr	$ra
-	
+# ============== PRINT THE GRID BOARD =================
 print_grid:				# GRID PRINTING
 	##### preamble #####
 	addi	$sp, $sp, -4
 	sw	$ra, 0($sp)
 	##### preamble #####
-
-	jal	print_line
-	
-	jal	print_vertical		# Row 1
-	move 	$a0, $t1
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t2
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t3
-	jal 	print_integer
-	jal	print_vertical
-	jal 	print_newline
-	
-	jal	print_line
-	
-	jal	print_vertical		# Row 2
-	move 	$a0, $t4
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t5
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t6
-	jal 	print_integer
-	jal	print_vertical
-	jal 	print_newline
-	
-	jal	print_line
-	
-	jal	print_vertical		# Row 3
-	move 	$a0, $t7
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t8
-	jal 	print_integer
-	jal	print_vertical
-	move	$a0, $t9
-	jal 	print_integer
-	jal	print_vertical
-	jal 	print_newline
-	
-	jal	print_line
-   
+	print_row $t1 $t2 $t3	# row 1
+	print_row $t4 $t5 $t6	# row 2
+	print_row $t7 $t8 $t9	# row 3
+	print_str LINE		# bottom of the board
    	##### end #####
    	lw	$ra, 0($sp)
    	addi	$sp, $sp, 4
    	##### end #####
     	jr 	$ra
 
-	# Used Functions for grid printing #
-print_line:
-	li 	$v0, 4 		
-    	la 	$a0, LINE
-    	syscall
-    	
-    	jr 	$ra	
-print_vertical:
-	li 	$v0, 4
-	la	$a0, VERTICAL
-	syscall	
-	
-	jr	$ra
 print_integer:
 	##### preamble #####
 	addi	$sp, $sp, -4
 	sw	$ra, 0($sp)
 	##### preamble #####
-		
-	jal	get_integer
-	move	$a0, $v0
+	jal	get_integer	# Get integer to Print
+	move	$a0, $v0	
 	li	$v0, 4
 	syscall
-	
 	##### end #####
 	lw	$ra, 0($sp)
 	addi	$sp, $sp, 4
@@ -324,17 +250,9 @@ print_256:
 print_512:
 	la	$v0, NUMBER_512
 	jr	$ra
-	
-print_newline:
-	li	$v0, 4
-	la	$a0, NEWLINE
-	syscall
-	
-	jr $ra
-	# End #
-	
+# =========== CHECK WIN/LOSE CONDITION =============
 is_win:
-	beq 	$t1, 512, win
+	beq 	$t1, 512, win	# Checks if 512
 	beq 	$t2, 512, win
 	beq 	$t3, 512, win
 	beq 	$t4, 512, win
@@ -343,13 +261,9 @@ is_win:
 	beq 	$t7, 512, win
 	beq 	$t8, 512, win
 	beq 	$t9, 512, win
-	
 	jr	$ra
 win:
-	li 	$v0, 4 		
-    	la 	$a0, WIN
-    	syscall
-    	
+	print_str WIN		# End if WIN!
     	j 	exit
     	
 is_lose:
@@ -376,24 +290,18 @@ is_lose:
 	beq	$t7, $t8, False
 	beq	$t8, $t9, False
 game_over:	
-	li 	$v0, 4 		
-    	la 	$a0, LOSE
-    	syscall
-    	
+	print_str LOSE
     	j exit
 False:
 	jr	$ra
-
+# ---- terminate -----
 terminate:
-	li 	$v0, 4 		
-    	la 	$a0, QUIT
-    	syscall
-			
+	print_str QUIT
 exit:
 	li 	$v0, 10
 	syscall
 
-store_origin:
+store_origin:				# store the state of the grid!
 	sw 	$t1, ORIGIN_GRID
     	sw 	$t2, ORIGIN_GRID+4
     	sw 	$t3, ORIGIN_GRID+8
@@ -403,11 +311,11 @@ store_origin:
     	sw 	$t7, ORIGIN_GRID+24
     	sw 	$t8, ORIGIN_GRID+28
     	sw 	$t9, ORIGIN_GRID+32
-    	
     	jr	$ra	
-			
-move_up:
-	move	$a0, $t1
+
+# ========= MOVEMENT ==========			
+move_up:	
+	move	$a0, $t1	# Merge and Compress Column 1 upward
 	move	$a1, $t4
 	move	$a2, $t7
 	jal 	compress
@@ -417,7 +325,7 @@ move_up:
 	move	$t4, $a1
 	move	$t7, $a2
 	
-	move	$a0, $t2
+	move	$a0, $t2	# Merge and Compress Column 2 upward
 	move	$a1, $t5
 	move	$a2, $t8
 	jal 	compress
@@ -427,7 +335,7 @@ move_up:
 	move	$t5, $a1
 	move	$t8, $a2
 	
-	move	$a0, $t3
+	move	$a0, $t3	# Merge and Compress Column 3 upward
 	move	$a1, $t6
 	move	$a2, $t9
 	jal 	compress
@@ -437,9 +345,9 @@ move_up:
 	move	$t6, $a1
 	move	$t9, $a2
 	
-	j	add_random_tile
+	j	add_random_tile	# Add a random tile
 move_left:
-	move	$a0, $t1
+	move	$a0, $t1	# Merge and Compress Row 1 to the left
 	move	$a1, $t2
 	move	$a2, $t3
 	jal 	compress
@@ -449,7 +357,7 @@ move_left:
 	move	$t2, $a1
 	move	$t3, $a2
 	
-	move	$a0, $t4
+	move	$a0, $t4	# Merge and Compress Row 2 to the left
 	move	$a1, $t5
 	move	$a2, $t6
 	jal 	compress
@@ -459,7 +367,7 @@ move_left:
 	move	$t5, $a1
 	move	$t6, $a2
 	
-	move	$a0, $t7
+	move	$a0, $t7	# Merge and Compress Row 3 to the left
 	move	$a1, $t8
 	move	$a2, $t9
 	jal 	compress
@@ -469,9 +377,9 @@ move_left:
 	move	$t8, $a1
 	move	$t9, $a2
 	
-	j	add_random_tile
+	j	add_random_tile	# Add a random tile
 move_down:
-	move	$a0, $t7
+	move	$a0, $t7	# Merge and Compress Column 1 downward
 	move	$a1, $t4
 	move	$a2, $t1
 	jal 	compress
@@ -481,7 +389,7 @@ move_down:
 	move	$t4, $a1
 	move	$t1, $a2
 	
-	move	$a0, $t8
+	move	$a0, $t8	# Merge and Compress Column 2 downward
 	move	$a1, $t5
 	move	$a2, $t2
 	jal 	compress
@@ -491,7 +399,7 @@ move_down:
 	move	$t5, $a1
 	move	$t2, $a2
 	
-	move	$a0, $t9
+	move	$a0, $t9	# Merge and Compress Column 3 downward
 	move	$a1, $t6
 	move	$a2, $t3
 	jal 	compress
@@ -501,9 +409,9 @@ move_down:
 	move	$t6, $a1
 	move	$t3, $a2
 	
-	j	add_random_tile
+	j	add_random_tile # Add random tile
 move_right:
-	move	$a0, $t3
+	move	$a0, $t3	# Merge and Compress Row 1 to the right
 	move	$a1, $t2
 	move	$a2, $t1
 	jal 	compress
@@ -513,7 +421,7 @@ move_right:
 	move	$t2, $a1
 	move	$t1, $a2
 	
-	move	$a0, $t6
+	move	$a0, $t6	# Merge and Compress Row 2 to the right
 	move	$a1, $t5
 	move	$a2, $t4
 	jal 	compress
@@ -523,7 +431,7 @@ move_right:
 	move	$t5, $a1
 	move	$t4, $a2
 	
-	move	$a0, $t9
+	move	$a0, $t9	# Merge and Compress Row 3 to the right
 	move	$a1, $t8
 	move	$a2, $t7
 	jal 	compress
@@ -535,41 +443,35 @@ move_right:
 	
 	j	add_random_tile
 
-compress:
-	bnez	$a1, compress_1
-	move	$a1, $a2
-	li	$a2, 0
+compress:			
+	bnez	$a1, compress_1	# If tile not empy
+	move	$a1, $a2	# If tile empty move
+	li	$a2, 0		
 compress_1:
-	bnez	$a0, compress_2
-	move	$a0, $a1
+	bnez	$a0, compress_2 # If tile not empty
+	move	$a0, $a1	# If tile empty move
 	li	$a1, 0
 compress_2:
-	bnez	$a1, compress_end
-	move	$a1, $a2
+	bnez	$a1, compress_end # If tile not empty
+	move	$a1, $a2	  # If tile empty move
 	li	$a2, 0
 compress_end:
-	jr	$ra
-
+	jr	$ra		  # return
 merge:
-	bne	$a0, $a1, merge_1
-	add	$a0, $a0, $a1
+	bne	$a0, $a1, merge_1 # If adjacent tiles not equal
+	add	$a0, $a0, $a1	  # Merge the first two tiles since equal >> add 
 	li	$a1, 0
 merge_1:
-	bne	$a1, $a2, merge_end
-	add	$a1, $a1, $a2
+	bne	$a1, $a2, merge_end # If adjacent last two tiles not equal
+	add	$a1, $a1, $a2	    # Merge the last two tiles since equal >> add
 	li	$a2, 0
 merge_end:
-	jr 	$ra
-			
+	jr 	$ra	
+# ====== adding a random tile =======
 add_random_tile:
-	jal 	check_origin		# Checks if grid changed
-
-	beq	$s0, 3, main_loop
-
-	li 	$a1, 9 
-    	li 	$v0, 42			# Randomizer syscall  
-    	syscall
-	
+	jal 	check_origin	    # Checks if grid changed
+	beq	$s0, 3, main_loop   # If $s0 is 3 - RNG disabled no need to add_random_tile
+	randomize 9		    # Choose a tile! from 1 to 9 >> (note zero indexed so choose a number in [0,8]
 	beq	$a0, 0, tile_t1
 	beq	$a0, 1, tile_t2
 	beq	$a0, 2,	tile_t3
@@ -579,25 +481,33 @@ add_random_tile:
 	beq	$a0, 6,	tile_t7
 	beq	$a0, 7,	tile_t8
 	beq	$a0, 8,	tile_t9
+											
+tile_t1: generate_tile $t1
+tile_t2: generate_tile $t2
+tile_t3: generate_tile $t3
+tile_t4: generate_tile $t4
+tile_t5: generate_tile $t5
+tile_t6: generate_tile $t6
+tile_t7: generate_tile $t7
+tile_t8: generate_tile $t8
+tile_t9: generate_tile $t9
 
+# -------- CHECK BOARD STATE IF MOVE INPUT IS VALID ------------
 check_origin:
 	##### preamble #####
-	addi	$sp, $sp, -16
+	addi	$sp, $sp, -16	# Load the origin board
 	sw	$s0, 0($sp)
 	sw	$s1, 4($sp)
 	sw	$s2, 8($sp)
 	sw	$ra, 12($sp)
 	##### preamble #####
-	
 	li 	$s0, 0       		# Change flag (0 = unchanged, 1 = changed)
     	li 	$s1, 0       		# Loop counter
 check_origin_loop:	
 	# Calculate offset
     	mul 	$s2, $s1, 4  		# Multiply counter by 4 (word size)
-
     	# Load original and current values
     	lw 	$s2, ORIGIN_GRID($s2)  	# Original value
-    
     	# Load current register value based on counter
     	beq 	$s1, 0, check_t1
     	beq 	$s1, 1, check_t2
@@ -608,33 +518,16 @@ check_origin_loop:
     	beq 	$s1, 6, check_t7
     	beq 	$s1, 7, check_t8
     	beq 	$s1, 8, check_t9
-check_t1:
-    	bne 	$s2, $t1, grid_changed
-    	j 	continue_loop
-check_t2:
-    	bne 	$s2, $t2, grid_changed
-    	j 	continue_loop
-check_t3:
-    	bne 	$s2, $t3, grid_changed
-    	j 	continue_loop
-check_t4:
-    	bne 	$s2, $t4, grid_changed
-    	j 	continue_loop
-check_t5:
-    	bne 	$s2, $t5, grid_changed
-    	j 	continue_loop
-check_t6:
-    	bne 	$s2, $t6, grid_changed
-    	j 	continue_loop
-check_t7:
-    	bne 	$s2, $t7, grid_changed
-    	j 	continue_loop
-check_t8:
-    	bne 	$s2, $t8, grid_changed
-    	j 	continue_loop
-check_t9:
-    	bne 	$s2, $t9, grid_changed
-    	j 	continue_loop
+check_t1: check_tile_change $s2, $t1 
+check_t2: check_tile_change $s2, $t2 
+check_t3: check_tile_change $s2, $t3 
+check_t4: check_tile_change $s2, $t4 
+check_t5: check_tile_change $s2, $t5 
+check_t6: check_tile_change $s2, $t6 
+check_t7: check_tile_change $s2, $t7 
+check_t8: check_tile_change $s2, $t8 
+check_t9: check_tile_change $s2, $t9
+
 continue_loop:	
 	# Increment counter
     	addi 	$s1, $s1, 1
@@ -648,7 +541,6 @@ grid_changed:
 check_result:
     	# Result based on change flag
     	beq 	$s0, 1, return_nothing
-
     	# Else 
     	j	return_invalid
 return_nothing:
@@ -659,7 +551,7 @@ return_nothing:
 	lw	$ra, 12($sp)
 	addi	$sp, $sp, 16
 	##### end #####
-	
+
 	jr	$ra
 return_invalid:
 	lw	$s0, 0($sp)
@@ -668,59 +560,15 @@ return_invalid:
 	lw	$ra, 12($sp)
 	addi	$sp, $sp, 16
 	##### end #####
-	
 	j	invalid_move
-			
-tile_t1:
-	bnez	$t1, add_random_tile
-	li	$t1, 2
-	j	main_loop
-tile_t2:
-	bnez	$t2, add_random_tile
-	li	$t2, 2
-	j	main_loop
-tile_t3:
-	bnez	$t3, add_random_tile
-	li	$t3, 2
-	j	main_loop
-tile_t4:
-	bnez	$t4, add_random_tile
-	li	$t4, 2
-	j	main_loop
-tile_t5:
-	bnez	$t5, add_random_tile
-	li	$t5, 2
-	j	main_loop
-tile_t6:
-	bnez	$t6, add_random_tile
-	li	$t6, 2
-	j	main_loop
-tile_t7:
-	bnez	$t7, add_random_tile
-	li	$t7, 2
-	j	main_loop
-tile_t8:
-	bnez	$t8, add_random_tile
-	li	$t8, 2
-	j	main_loop
-tile_t9:
-	bnez	$t9, add_random_tile
-	li	$t9, 2
-	j	main_loop
-																
+
+
+# ===== RNG =======																													
 rng_disable:
 	li	$s0, 3	
-	
-	li 	$v0, 4 		
-    	la 	$a0, RNG_DISABLED
-    	syscall
-    	
+	print_str RNG_DISABLED
     	j	input_move
 rng_enable:	
 	li	$s0, 4	
-	
-	li 	$v0, 4 		
-    	la 	$a0, RNG_ENABLED
-    	syscall
-    	
+	print_str RNG_ENABLED
     	j	input_move
