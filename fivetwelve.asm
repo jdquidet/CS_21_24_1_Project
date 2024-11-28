@@ -60,6 +60,7 @@ ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
 	print_str VERTICAL
 	print_str NEWLINE
      .end_macro
+     
 # -- Functional Macros
 # Generate zero or two
     .macro call_zero_or_two %reg
@@ -67,24 +68,37 @@ ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
 	move %reg, $v0		  # returns a zero or two
     .end_macro
 # Input the state of a tile
-	.macro set_tile %reg
-		li 	$v0, 5
-		syscall
-		move 	%reg, $v0
-		move	$a0, %reg
-		jal	check_integer
-	.end_macro
+    .macro set_tile %reg
+	li 	$v0, 5
+	syscall
+	move 	%reg, $v0
+	move	$a0, %reg
+	jal	check_integer
+    .end_macro
 # Generate a 2 on tile
-	.macro generate_tile %reg
-		bnez	%reg, add_random_tile
-		li	%reg, 2
-		j	main_loop
-	.end_macro
+    .macro generate_tile %reg
+	bnez	%reg, add_random_tile
+	li	%reg, 2
+	j	main_loop
+    .end_macro
 # Check if changed
-	.macro check_tile_change %reg1 %reg2
-		bne %reg1, %reg2, grid_changed
-    	j 	continue_loop
-	.end_macro
+    .macro check_tile_change %reg1 %reg2
+	bne %reg1, %reg2, grid_changed
+    	j continue_loop
+    .end_macro
+# Move tiles - Move the row/column -> compress -> merge adjacent -> compress
+    .macro move_tiles %r1 %r2 %r3
+    	move	$a0, %r1	
+	move	$a1, %r2
+	move	$a2, %r3
+	jal 	compress
+	jal	merge
+	jal 	compress
+	move	%r1, $a0
+	move	%r2, $a2
+	move	%r3, $a2
+    .end_macro 
+	
 
 # ---------------------- MAIN PROGRAM ----------------------
 .text
@@ -318,134 +332,25 @@ store_origin:				# store the state of the grid!
 
 # ========= MOVEMENT ==========			
 move_up:	
-	move	$a0, $t1	# Merge and Compress Column 1 upward
-	move	$a1, $t4
-	move	$a2, $t7
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t1, $a0
-	move	$t4, $a1
-	move	$t7, $a2
-	
-	move	$a0, $t2	# Merge and Compress Column 2 upward
-	move	$a1, $t5
-	move	$a2, $t8
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t2, $a0
-	move	$t5, $a1
-	move	$t8, $a2
-	
-	move	$a0, $t3	# Merge and Compress Column 3 upward
-	move	$a1, $t6
-	move	$a2, $t9
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t3, $a0
-	move	$t6, $a1
-	move	$t9, $a2
-	
+	move_tiles $t1 $t4 $t7 	# Merge and Compress Column 1 upward
+	move_tiles $t2 $t5 $t8 	# Merge and Compress Column 2 upward
+	move_tiles $t3 $t6 $t9 	# Merge and Compress Column 3 upward
 	j	add_random_tile	# Add a random tile
 move_left:
-	move	$a0, $t1	# Merge and Compress Row 1 to the left
-	move	$a1, $t2
-	move	$a2, $t3
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t1, $a0
-	move	$t2, $a1
-	move	$t3, $a2
-	
-	move	$a0, $t4	# Merge and Compress Row 2 to the left
-	move	$a1, $t5
-	move	$a2, $t6
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t4, $a0
-	move	$t5, $a1
-	move	$t6, $a2
-	
-	move	$a0, $t7	# Merge and Compress Row 3 to the left
-	move	$a1, $t8
-	move	$a2, $t9
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t7, $a0
-	move	$t8, $a1
-	move	$t9, $a2
-	
+	move_tiles $t1 $t2 $t3 	# Merge and Compress Row 1 to the left
+	move_tiles $t4 $t5 $t6 	# Merge and Compress Row 2 to the left
+	move_tiles $t7 $t8 $t9 	# Merge and Compress Row 3 to the left
 	j	add_random_tile	# Add a random tile
 move_down:
-	move	$a0, $t7	# Merge and Compress Column 1 downward
-	move	$a1, $t4
-	move	$a2, $t1
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t7, $a0
-	move	$t4, $a1
-	move	$t1, $a2
-	
-	move	$a0, $t8	# Merge and Compress Column 2 downward
-	move	$a1, $t5
-	move	$a2, $t2
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t8, $a0
-	move	$t5, $a1
-	move	$t2, $a2
-	
-	move	$a0, $t9	# Merge and Compress Column 3 downward
-	move	$a1, $t6
-	move	$a2, $t3
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t9, $a0
-	move	$t6, $a1
-	move	$t3, $a2
-	
-	j	add_random_tile # Add random tile
+	move_tiles $t7 $t4 $t1 	# Merge and Compress Column 1 downward
+	move_tiles $t8 $t5 $t2 	# Merge and Compress Column 2 downward
+	move_tiles $t9 $t6 $t3 	# Merge and Compress Column 3 downward
+	j	add_random_tile	# Add random tile
 move_right:
-	move	$a0, $t3	# Merge and Compress Row 1 to the right
-	move	$a1, $t2
-	move	$a2, $t1
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t3, $a0
-	move	$t2, $a1
-	move	$t1, $a2
-	
-	move	$a0, $t6	# Merge and Compress Row 2 to the right
-	move	$a1, $t5
-	move	$a2, $t4
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t6, $a0
-	move	$t5, $a1
-	move	$t4, $a2
-	
-	move	$a0, $t9	# Merge and Compress Row 3 to the right
-	move	$a1, $t8
-	move	$a2, $t7
-	jal 	compress
-	jal	merge
-	jal 	compress
-	move	$t9, $a0
-	move	$t8, $a1
-	move	$t7, $a2
-	
-	j	add_random_tile
-
+	move_tiles $t3 $t2 $t1 	# Merge and Compress Row 1 to the right
+	move_tiles $t6 $t5 $t4 	# Merge and Compress Row 2 to the right
+	move_tiles $t9 $t8 $t7 	# Merge and Compress Row 3 to the right
+	j	add_random_tile	# Add random tile
 compress:			
 	bnez	$a1, compress_1	# If tile not empy
 	move	$a1, $a2	# If tile empty move
@@ -456,10 +361,10 @@ compress_1:
 	li	$a1, 0
 compress_2:
 	bnez	$a1, compress_end # If tile not empty
-	move	$a1, $a2	  # If tile empty move
+	move	$a1, $a2	  	  # If tile empty move
 	li	$a2, 0
 compress_end:
-	jr	$ra		  # return
+	jr	$ra		 		  # return
 merge:
 	bne	$a0, $a1, merge_1 # If adjacent tiles not equal
 	add	$a0, $a0, $a1	  # Merge the first two tiles since equal >> add 
@@ -535,7 +440,6 @@ continue_loop:
 	# Increment counter
     	addi 	$s1, $s1, 1
     	blt 	$s1, 9, check_origin_loop
-
     	# If we get here, no changes detected
     	j 	check_result
 grid_changed:
@@ -554,7 +458,6 @@ return_nothing:
 	lw	$ra, 12($sp)
 	addi	$sp, $sp, 16
 	##### end #####
-
 	jr	$ra
 return_invalid:
 	lw	$s0, 0($sp)
@@ -564,7 +467,6 @@ return_invalid:
 	addi	$sp, $sp, 16
 	##### end #####
 	j	invalid_move
-
 
 # ===== RNG =======																													
 rng_disable:
