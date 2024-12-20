@@ -1,5 +1,4 @@
 .data
-		.align	2
 WELCOME: 	.asciiz "Main Menu:\n[1] New Game\n[2] Start from a State\n[X] Quit\n"
 GRID_SIZE:	.asciiz	"Input the size of the board: \n"
 BOARD_CONFIG:	.asciiz "Enter a board configuration (Invalid input = back to Main menu):\n"
@@ -25,12 +24,14 @@ WIN:		.asciiz "Congratulations! You have reached the 2048 tile!"
 LOSE: 		.asciiz "Game Over."
 ENTER_MOVE:	.asciiz "Enter a move (W=Up, A=Left, S=Down, D=Right, X=Quit, 3=Disable RNG, 4=Enable RNG):\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
+		.align 	2
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
 MOVE:		.word	0:1		# We store user input here
 N:		.word	0:1		# We store the indicated number N for the NxN grid
 NxN:		.word	0:1		# value of NxN
 GRID_BASE:	.word	0:1		# grid base address
 PREV_GRID:	.word	0:1		# prev grid base address
+TEMP_GRID:	.word	0:1		# temporary grid for rotate and reverse functions
 RNG_FLAG:	.word	0:1		# 3 = disabled, 4 = enabled
 
 # ---------------------- MACROS TO REDUCE REDUNDANCY ----------------------
@@ -86,6 +87,9 @@ main:
 	sw	$v0, GRID_BASE	
 	sw	$v1, NxN
 	
+	jal	make_history_grid
+	jal	make_temp_grid
+	
 	lw	$a0, MOVE		# load MOVE to a0
 	beq 	$a0, 0xa31, input_new	# If NEW GAME
 	beq 	$a0, 0xa32, input_state # If Start from a STATE
@@ -106,7 +110,30 @@ grid_malloc:
 	move	$v1, $s1		# $v1 = NxN
 
 	jr	$ra
-	
+make_history_grid:
+	##### preamble #####
+	addi	$sp, $sp, -4
+	sw	$ra, 0($sp)
+	##### preamble #####
+	lw	$a0, N
+	jal	grid_malloc		# memory allocation function
+	sw	$v0, PREV_GRID
+	##### end #####
+	lw	$ra, 0($sp)
+	addi	$sp, $sp, 4
+	##### end #####	
+make_temp_grid:
+	##### preamble #####
+	addi	$sp, $sp, -4
+	sw	$ra, 0($sp)
+	##### preamble #####
+	lw	$a0, N
+	jal	grid_malloc		# memory allocation function
+	sw	$v0, TEMP_GRID
+	##### end #####
+	lw	$ra, 0($sp)
+	addi	$sp, $sp, 4
+	##### end #####	
 # ---------------------- END ----------------------	
 			
 # ======= NEW GAME ==========
@@ -196,6 +223,7 @@ input_move:	# Get User Input
 	read_str MOVE			# Get Input
 	
 	jal	store_current
+	
 	lw	$t0, MOVE
 	beq	$t0, 0xa58, terminate	# X = Quit
 	
@@ -400,14 +428,6 @@ False:
 	jr	$ra
 
 store_current:
-	##### preamble #####
-	addi	$sp, $sp, -4
-	sw	$ra, 0($sp)
-	##### preamble #####
-	lw	$a0, N
-	jal	grid_malloc		# memory allocation function
-	sw	$v0, PREV_GRID
-	
 	li	$t0, 0			# grid position counter
 	lw	$s0, NxN		# value of NxN
 	lw	$s1, GRID_BASE		# grid base address
@@ -421,25 +441,47 @@ store_loop:
     	
     	increment $t0
     	blt	$t0, $s0, store_loop
-    	
-    	##### end #####
-	lw	$ra, 0($sp)
-	addi	$sp, $sp, 4
-	##### end #####	
+
     	jr	$ra
 # ---------------------- END ----------------------
 
-
 move_up:
+	jal	rotate_right
+	jal	rotate_right
+	jal	rotate_right
+	
+	jal 	compress
+	jal	merge
+	jal	compress
+	
+	jal	rotate_right
+	j	add_random_tile		# Add a random tile
 move_left:
 	jal 	compress
 	jal	merge
 	jal	compress
+	
 	j	add_random_tile		# Add a random tile
-
 move_down:
+	jal	rotate_right
+	
+	jal 	compress
+	jal	merge
+	jal	compress
+	
+	jal	rotate_right
+	jal	rotate_right
+	jal	rotate_right
+	j	add_random_tile		# Add a random tile
 move_right:
-
+	jal	reverse
+	
+	jal 	compress
+	jal	merge
+	jal	compress
+	
+	jal	reverse
+	j	add_random_tile		# Add a random tile
 rng_disable:
 	li	$s0, 3
 	sw	$s0, RNG_FLAG
@@ -527,13 +569,98 @@ merge_loop:
     	sw 	$t6, ($t2)        	# Store sum in first position
     	sw 	$zero, ($t4)      	# Store zero in second position
 skip:
-    	addi 	$t0, $t0, 2     		# Move to next pair
+    	addi 	$t0, $t0, 2     	# Move to next pair
     	blt	$t0, $s1, merge_loop
     	jr	$ra
 merge_next_row:	
 	increment $t0
 	blt	$t0, $s1, merge_loop
 	jr	$ra
+	
+rotate_right:
+	lw 	$s0, GRID_BASE    	# Grid base address
+    	la 	$s1, TEMP_GRID    	# Temp array base address
+    	lw 	$s2, N       		# N (size)
+
+	li 	$t0, 0       		# row counter
+transfer_row_loop:
+    	li 	$t1, 0       		# column counter
+transfer_col_loop:
+    	# Calculate source index: row * N + col
+    	mul 	$t2, $t0, $s2
+    	add 	$t2, $t2, $t1
+    	sll 	$t2, $t2, 2     	# multiply by 4 for word offset
+    	add 	$t2, $t2, $s0
+    	lw 	$t3, ($t2)       	# load value
+    	
+    	# Calculate destination index: col * N + (N-1-row)
+    	mul 	$t4, $t1, $s2
+    	sub 	$t5, $s2, 1
+    	sub 	$t5, $t5, $t0
+    	add 	$t4, $t4, $t5
+    	sll 	$t4, $t4, 2
+    	add 	$t4, $t4, $s1
+    	sw 	$t3, ($t4)       	# store in temp array
+    	
+    	increment $t1    		# increment col
+    	blt 	$t1, $s2, transfer_col_loop
+    	
+    	increment $t0    		# increment row
+    	blt 	$t0, $s2, transfer_row_loop
+
+# Copy back to original array
+    	mul 	$t7, $s2, $s2   	# total elements
+    	li 	$t0, 0           	# counter
+copy_loop:
+    	sll 	$t1, $t0, 2
+    	add 	$t2, $s1, $t1   	# temp address
+    	add 	$t3, $s0, $t1   	# grid address
+    	lw 	$t4, ($t2)       	# load from temp
+    	sw 	$t4, ($t3)       	# store in grid
+    	increment $t0
+    	blt 	$t0, $t7, copy_loop
+
+    	jr	$ra
+    	
+reverse:
+	lw 	$s0, GRID_BASE    	# Grid base address
+    	la 	$s1, TEMP_GRID    	# Temp array base address
+    	lw 	$s2, N       		# N (size)
+    	li 	$t0, 0           	# row counter
+rev_row:
+    	li 	$t1, 0           	# left column
+    	sub 	$t2, $s2, 1     	# right column
+rev_col:
+    	bge 	$t1, $t2, rev_next_row  # Check if left >= right
+
+    	# Calculate left index
+    	mul 	$t3, $t0, $s2
+    	add 	$t3, $t3, $t1
+    	sll 	$t3, $t3, 2
+    	add 	$t3, $t3, $s0
+    
+    	# Calculate right index
+    	mul 	$t4, $t0, $s2
+    	add 	$t4, $t4, $t2
+    	sll 	$t4, $t4, 2
+    	add 	$t4, $t4, $s0
+    
+    	# Swap values
+    	lw 	$t5, ($t3)       	# left value
+    	lw 	$t6, ($t4)       	# right value
+    	sw 	$t6, ($t3)       	# store right in left
+    	sw 	$t5, ($t4)       	# store left in right
+    
+    	addi 	$t1, $t1, 1    		# increment left
+    	sub 	$t2, $t2, 1     	# decrement right
+    	j 	rev_col
+
+rev_next_row:    
+    	addi 	$t0, $t0, 1    		# next row
+    	blt 	$t0, $s2, rev_row
+    	
+    	jr	$ra
+	
 # ---------------------- END ----------------------
 	
 add_random_tile:
@@ -586,6 +713,4 @@ check_previous_loop:
     	j	invalid_move
 grid_changed:
 	jr	$ra
-    	
-    	
 # ---------------------- END ----------------------
