@@ -95,7 +95,7 @@ ORIGIN_GRID: 	.word 	0:9  		# Array to store 9 original values
 	jal	merge
 	jal 	compress
 	move	%r1, $a0
-	move	%r2, $a2
+	move	%r2, $a1
 	move	%r3, $a2
     .end_macro 
 	
