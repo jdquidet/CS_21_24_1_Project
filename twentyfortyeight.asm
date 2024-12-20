@@ -528,7 +528,10 @@ merge_loop:
     	sw 	$zero, ($t4)      	# Store zero in second position
 skip:
     	addi 	$t0, $t0, 2     		# Move to next pair
+    	blt	$t0, $s1, merge_loop
+    	jr	$ra
 merge_next_row:	
+	increment $t0
 	blt	$t0, $s1, merge_loop
 	jr	$ra
 # ---------------------- END ----------------------
