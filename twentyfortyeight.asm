@@ -24,15 +24,15 @@ WIN:		.asciiz "Congratulations! You have reached the 2048 tile!"
 LOSE: 		.asciiz "Game Over."
 ENTER_MOVE:	.asciiz "Enter a move (W=Up, A=Left, S=Down, D=Right, X=Quit, 3=Disable RNG, 4=Enable RNG):\n"
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
-		.align 	2
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
-MOVE:		.word	0:1		# We store user input here
-N:		.word	0:1		# We store the indicated number N for the NxN grid
-NxN:		.word	0:1		# value of NxN
-GRID_BASE:	.word	0:1		# grid base address
-PREV_GRID:	.word	0:1		# prev grid base address
-TEMP_GRID:	.word	0:1		# temporary grid for rotate and reverse functions
-RNG_FLAG:	.word	0:1		# 3 = disabled, 4 = enabled
+		.align 	2
+MOVE:		.space	4		# We store user input here
+N:		.space	4		# We store the indicated number N for the NxN grid
+NxN:		.space	4		# value of NxN
+GRID_BASE:	.space	4		# grid base address
+PREV_GRID:	.space	4		# prev grid base address
+TEMP_GRID:	.space	4		# temporary grid for rotate and reverse functions
+RNG_FLAG:	.word	4		# 3 = disabled, 4 = enabled
 
 # ---------------------- MACROS TO REDUCE REDUNDANCY ----------------------
 # Print String
@@ -89,14 +89,14 @@ main:
 	
 	jal	make_history_grid
 	jal	make_temp_grid
-	
+main_move:	
 	lw	$a0, MOVE		# load MOVE to a0
 	beq 	$a0, 0xa31, input_new	# If NEW GAME
 	beq 	$a0, 0xa32, input_state # If Start from a STATE
 	beq	$a0, 0xa58, terminate	# X = Quit
 	
 	print_str INVALID_INPUT		# otherwise, Print INVALID INPUT
-	j	main			# Loop back to main (main menu)
+	j	main_move		# Loop back to main (main menu)
 
 # ---------------------- FUNCTIONS ----------------------
 grid_malloc:
@@ -122,6 +122,7 @@ make_history_grid:
 	lw	$ra, 0($sp)
 	addi	$sp, $sp, 4
 	##### end #####	
+	jr	$ra
 make_temp_grid:
 	##### preamble #####
 	addi	$sp, $sp, -4
@@ -134,6 +135,7 @@ make_temp_grid:
 	lw	$ra, 0($sp)
 	addi	$sp, $sp, 4
 	##### end #####	
+	jr	$ra
 # ---------------------- END ----------------------	
 			
 # ======= NEW GAME ==========
@@ -405,22 +407,22 @@ is_lose_loop:
     	beqz	$t2, False		# Check if there's an empty tile
     	
     	# check right
-    	addi	$t3, $t0, 2		# check right position
+    	addi	$t3, $t0, 1		# check right position
     	div	$t3, $s0
 	mfhi	$t3
-    	bgt 	$t3, $s0, check_down  	# Skip if out of bounds
+    	blt 	$t3, $t0, check_down  	# Skip if out of bounds
     	lw 	$t4, 4($t1) 		# Load right value
     	beq	$t2, $t4, False
 check_down:
-	mflo	$t3			# get y coordinate 
-	bge 	$t3, $s0, skip_down 	# Skip if out of bounds
-	mul  	$t3, $s0, 4       	# N * 4
-	add	$t3, $t1, $t3		# adds offset to original position's address
+	add	$t3, $t0, $s0		# get y coordinate 
+	bge 	$t3, $s1, skip_down 	# Skip if out of bounds
+	sll  	$t3, $t3, 2       	# N * 4
+	add	$t3, $t3, $s2		# adds offset to original position's address
 	lw	$t4, ($t3)		# Load down value
 	beq	$t2, $t4, False	
 skip_down:	
 	increment $t0
-	blt	$t0, $s0, is_lose_loop
+	blt	$t0, $s1, is_lose_loop
 	
 	print_str LOSE			# otherwise, game over
     	j exit
@@ -523,17 +525,18 @@ zero_tile:
     	beqz 	$t4, autofill_loop    	# If reached end of row, fill rest with zeros
     	j 	compress_loop
 autofill_loop:
-	addi	$t4, $s2, 1
-	div	$t4, $s3
+	div	$s2, $s3
 	mfhi	$t4			# index mod N = row counter
+	beqz 	$t4, compress_next_row  # If reached end of row, go to next row
 
     	sll 	$t1, $s2, 2       	# Get offset
     	add 	$t1, $t1, $s0     	# Get address
     	sw 	$zero, ($t1)      	# Store zero
     	increment $s2      		# Increment counter
-    	beqz 	$t4, compress_next_row  # If reached end of row, go to next row
+    	
     	j 	autofill_loop
 compress_next_row:	
+	move	$s2, $t0
 	blt	$t0, $s1, compress_loop
 	jr	$ra
 
@@ -550,7 +553,7 @@ merge_loop:
 	div	$t1, $s2
 	mfhi	$t8			# index mod N = next counter
 	
-    	bgt 	$t7, $t8, merge_next_row  	# If current row index is end, next row
+    	bgt 	$t7, $t8, skip  	# If current row index is end, next row
 
 	# Load current and next elements
     	sll 	$t2, $t0, 2     	# Current index * 4
@@ -568,18 +571,15 @@ merge_loop:
     	add 	$t6, $t3, $t5    	# Add values
     	sw 	$t6, ($t2)        	# Store sum in first position
     	sw 	$zero, ($t4)      	# Store zero in second position
+
 skip:
-    	addi 	$t0, $t0, 2     	# Move to next pair
-    	blt	$t0, $s1, merge_loop
-    	jr	$ra
-merge_next_row:	
 	increment $t0
 	blt	$t0, $s1, merge_loop
 	jr	$ra
 	
 rotate_right:
 	lw 	$s0, GRID_BASE    	# Grid base address
-    	la 	$s1, TEMP_GRID    	# Temp array base address
+    	lw 	$s1, TEMP_GRID    	# Temp array base address
     	lw 	$s2, N       		# N (size)
 
 	li 	$t0, 0       		# row counter
@@ -624,7 +624,7 @@ copy_loop:
     	
 reverse:
 	lw 	$s0, GRID_BASE    	# Grid base address
-    	la 	$s1, TEMP_GRID    	# Temp array base address
+    	lw 	$s1, TEMP_GRID    	# Temp array base address
     	lw 	$s2, N       		# N (size)
     	li 	$t0, 0           	# row counter
 rev_row:
