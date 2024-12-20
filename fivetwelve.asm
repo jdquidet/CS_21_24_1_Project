@@ -165,7 +165,7 @@ zero:
 two:
 	bge	$t0, 2, zero	# 
 	li 	$v0, 2
-	addi 	$t0, $t0, 1	# increment $t0 >> there are now $t0 tiles in the board
+	addi 	$t0, $t0, 1	# increment $t0 >> there are now $t0 2-tiles in the board
 	jr 	$ra
 # End #
 # ======= NEW GAME FROM STATE ==========
