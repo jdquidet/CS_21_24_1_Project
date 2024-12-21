@@ -231,16 +231,18 @@ input_move:	# Get User Input
 	read_str MOVE			# Get Input
 	
 	lw	$t0, MOVE
-	beq	$t0, 0xa58, terminate	# X = Quit
-	beq	$t0, 0xa33, rng_disable	# 3 = RNG disable
-	beq	$t0, 0xa34, rng_enable	# 4 = RNG enable
-	beq	$t0, 0xa7a, undo	# z = undo
-	beq 	$t0, 0x31325343, cheat	# CS21 cheat code 
 	
 	beq	$t0, 0xa57, move_up	# W = move up
 	beq	$t0, 0xa41, move_left	# A = move left
 	beq	$t0, 0xa53, move_down	# S = move down
 	beq	$t0, 0xa44, move_right	# D = move right
+	
+	beq	$t0, 0xa58, terminate	# X = Quit
+	beq	$t0, 0xa33, rng_disable	# 3 = RNG disable
+	beq	$t0, 0xa34, rng_enable	# 4 = RNG enable
+	beq	$t0, 0xa7a, undo	# z = undo
+
+	beq 	$t0, 0x31325343, cheat	# CS21 cheat code 
 	
 # Skipped if move is valid -- else we jump here if board changed
 invalid_move:	
@@ -362,8 +364,8 @@ get_integer:
 	beq	$a0, 128, print_128
 	beq	$a0, 256, print_256
 	beq	$a0, 512, print_512
-	beq	$a0, 512, print_1024
-	beq	$a0, 512, print_2048
+	beq	$a0, 1024, print_1024
+	beq	$a0, 2048, print_2048
 print_0:
 	la	$v0, NUMBER_0
 	jr 	$ra
@@ -537,6 +539,8 @@ cheat:
 	addi	$sp, $sp, -4
 	sw	$t0, 0($sp)
 	##### preamble #####
+	jal	store_current
+	
 	li	$t0, 0			# grid position counter
 	lw	$s0, NxN		# value of NxN
 	lw	$s1, GRID_BASE		# current grid base address
