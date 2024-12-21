@@ -29,7 +29,6 @@ ENTER_MOVE:	.asciiz "Enter a move (W=Up, A=Left, S=Down, D=Right, X=Quit, 3=Disa
 RNG_DISABLED:	.asciiz "RNG Disabled.\n"
 RNG_ENABLED:	.asciiz "RNG Enabled.\n"
 		.align 	2
-MOVE:		.space	4		# We store user input here
 N:		.space	4		# We store the indicated number N for the NxN grid
 NxN:		.space	4		# value of NxN
 GRID_BASE:	.space	4		# grid base address
@@ -38,8 +37,8 @@ TEMP_GRID:	.space	4		# temporary grid for rotate and reverse functions
 RNG_FLAG:	.word	4		# 3 = disabled, 4 = enabled
 CURRENT_MOVES:	.word   0
 CURRENT_SCORE:	.word	0
-
-# ---------------------- MACROS TO REDUCE REDUNDANCY ----------------------
+MOVE:		.word			# We store user input here
+# ---------------------- MACROS ----------------------
 # Print String
     .macro print_str %str
         li 	$v0, 4
@@ -83,7 +82,6 @@ CURRENT_SCORE:	.word	0
 	jal	check_integer
 	sw	$a0, (%reg)
     .end_macro
-
 # ---------------------- MAIN PROGRAM ----------------------
 .text
 # First Load Initialize the Board
@@ -108,7 +106,6 @@ main_move:
 	
 	print_str INVALID_INPUT		# otherwise, Print INVALID INPUT
 	j	main_move		# Loop back to main (main menu)
-
 # ---------------------- FUNCTIONS ----------------------
 grid_malloc:
 	move	$s0, $a0
@@ -148,7 +145,6 @@ make_temp_grid:
 	##### end #####	
 	jr	$ra
 # ---------------------- END ----------------------	
-			
 # ======= NEW GAME ==========
 input_new:				# NEW GAME 1
 	li 	$t0, 0			# counter so that there will be only two 2-tiles in the grid
@@ -166,7 +162,6 @@ zero_or_two_loop:
 	beq	$t0, 2, main_loop 		# If $t0 = 2, tile is ready to be printed
 	beq 	$t1, $s0, grid_position_reset 	# If reached (N, N) in the grid, restart back to (0, 0)
 	j	zero_or_two_loop 		# loop back if conditions are not met
-
 # ---------------------- FUNCTIONS ----------------------
 zero_or_two:
 	li	$t3, 2
@@ -182,7 +177,6 @@ two:
 	increment $t0			# increment $t0 >> there are now $t0 tiles in the board
 	jr 	$ra			# return 2
 # ---------------------- END ----------------------
-
 # ======= NEW GAME FROM STATE ==========
 input_state:				# NEW GAME 2
 	print_str BOARD_CONFIG
@@ -199,6 +193,12 @@ board_config_loop:
 	
 	j	main_loop
 
+# ---- terminate -----
+terminate:
+	print_str QUIT
+exit:
+	li 	$v0, 10
+	syscall
 # ---------------------- FUNCTIONS ----------------------
 check_integer:
 	beq	$a0, 0, valid_integer	# check if integers are valid
@@ -218,14 +218,6 @@ check_integer:
 valid_integer:
 	jr	$ra
 # ---------------------- END ----------------------
-
-# ---- terminate -----
-terminate:
-	print_str QUIT
-exit:
-	li 	$v0, 10
-	syscall
-
 # ===== Main Loop - print grid - check win state - get input =====
 main_loop:
 	jal	calculate_score
@@ -233,6 +225,8 @@ main_loop:
 	jal	is_win			# Check if win
 	jal	is_lose			# Check if lose
 input_move:	# Get User Input
+	sw	$zero, MOVE		# Reset MOVE value to 0
+
 	print_str ENTER_MOVE		# Prompt Move
 	read_str MOVE			# Get Input
 	
@@ -241,8 +235,8 @@ input_move:	# Get User Input
 	beq	$t0, 0xa33, rng_disable	# 3 = RNG disable
 	beq	$t0, 0xa34, rng_enable	# 4 = RNG enable
 	beq	$t0, 0xa7a, undo	# z = undo
+	beq 	$t0, 0x31325343, cheat	# CS21 cheat code 
 	
-	jal	store_current
 	beq	$t0, 0xa57, move_up	# W = move up
 	beq	$t0, 0xa41, move_left	# A = move left
 	beq	$t0, 0xa53, move_down	# S = move down
@@ -252,7 +246,6 @@ input_move:	# Get User Input
 invalid_move:	
 	print_str INVALID_INPUT		# Print INVALID INPUT
 	j	input_move		# Loop back to input_move
-		
 # ---------------------- FUNCTIONS ----------------------	
 calculate_score:
 	li	$t0, 0			# grid position counter
@@ -271,7 +264,6 @@ calculate_loop:
 	sw	$s2, CURRENT_SCORE
     	jr	$ra
 	
-
 print_grid:				# GRID PRINTING
 	##### preamble #####
 	addi	$sp, $sp, -4
@@ -291,7 +283,6 @@ print_grid:				# GRID PRINTING
 	addi	$sp, $sp, 4
 	##### end #####
 	jr	$ra
-	
 print_border:
 	##### preamble #####
 	addi	$sp, $sp, -8
@@ -461,33 +452,10 @@ skip_down:
     	j exit
 False:
 	jr	$ra
-
-store_current:
-	##### preamble #####
-	addi	$sp, $sp, -4
-	sw	$t0, 0($sp)
-	##### preamble #####
-	li	$t0, 0			# grid position counter
-	lw	$s0, NxN		# value of NxN
-	lw	$s1, GRID_BASE		# grid base address
-	lw	$s2, PREV_GRID		# previous grid base address
-store_loop:
-	sll 	$t1, $t0, 2       	# Multiply index by 4 for word offset
-    	add 	$t2, $t1, $s1     	# Get address of current position
-    	lw 	$t3, ($t2)         	# Load current element
-    	add 	$t4, $t1, $s2     	
-    	sw	$t3, ($t4)
-    	
-    	increment $t0
-    	blt	$t0, $s0, store_loop
-	
-	##### end #####
-	lw	$t0, 0($sp)
-	addi	$sp, $sp, 4
-	##### end #####
-    	jr	$ra
 # ---------------------- END ----------------------
 move_up:
+	jal	store_current
+
 	jal	rotate_right
 	jal	rotate_right
 	jal	rotate_right
@@ -499,12 +467,16 @@ move_up:
 	jal	rotate_right
 	j	add_random_tile		# Add a random tile
 move_left:
+	jal	store_current
+
 	jal 	compress
 	jal	merge
 	jal	compress
 	
 	j	add_random_tile		# Add a random tile
 move_down:
+	jal	store_current
+
 	jal	rotate_right
 	
 	jal 	compress
@@ -516,6 +488,8 @@ move_down:
 	jal	rotate_right
 	j	add_random_tile		# Add a random tile
 move_right:
+	jal	store_current
+
 	jal	reverse
 	
 	jal 	compress
@@ -557,7 +531,55 @@ undo_loop:
     	blt	$t0, $s0, undo_loop
 
     	j	main_loop
+    	
+cheat:
+	##### preamble #####
+	addi	$sp, $sp, -4
+	sw	$t0, 0($sp)
+	##### preamble #####
+	li	$t0, 0			# grid position counter
+	lw	$s0, NxN		# value of NxN
+	lw	$s1, GRID_BASE		# current grid base address
+cheat_loop:
+	sll 	$t1, $t0, 2       	# Multiply index by 4 for word offset
+    	add 	$t2, $t1, $s1     	# Get address of current position
+    	lw 	$t3, ($t2)         	# Load current element
+    	sll 	$t3, $t3, 1     	
+    	sw	$t3, ($t2)
+    	
+    	increment $t0
+    	blt	$t0, $s0, cheat_loop
+    	##### end #####
+	lw	$t0, 0($sp)
+	addi	$sp, $sp, 4
+	##### end #####
+    	j	main_loop
 # ---------------------- FUNCTIONS ----------------------
+store_current:
+	##### preamble #####
+	addi	$sp, $sp, -4
+	sw	$t0, 0($sp)
+	##### preamble #####
+	li	$t0, 0			# grid position counter
+	lw	$s0, NxN		# value of NxN
+	lw	$s1, GRID_BASE		# grid base address
+	lw	$s2, PREV_GRID		# previous grid base address
+store_loop:
+	sll 	$t1, $t0, 2       	# Multiply index by 4 for word offset
+    	add 	$t2, $t1, $s1     	# Get address of current position
+    	lw 	$t3, ($t2)         	# Load current element
+    	add 	$t4, $t1, $s2     	
+    	sw	$t3, ($t4)
+    	
+    	increment $t0
+    	blt	$t0, $s0, store_loop
+	
+	##### end #####
+	lw	$t0, 0($sp)
+	addi	$sp, $sp, 4
+	##### end #####
+    	jr	$ra
+
 compress:
 	li	$t0, 0			# grid position counter
 	lw	$s0, GRID_BASE		# grid base address
