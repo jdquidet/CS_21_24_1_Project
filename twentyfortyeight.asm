@@ -1,3 +1,6 @@
+# Jan Albert Quidet
+# Judelle Clareese Gaza
+# CS 21 Project 2 - 2048 in MIPS PART II
 .data
 WELCOME: 	.asciiz "Main Menu:\n[1] New Game\n[2] Start from a State\n[X] Quit\n"
 GRID_SIZE:	.asciiz	"Input the size of the board: \n"
